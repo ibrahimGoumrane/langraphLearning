@@ -1,5 +1,5 @@
 import re
-from utils import LoggerSetup
+from main import LoggerSetup
 
 class Cleaning:
     """

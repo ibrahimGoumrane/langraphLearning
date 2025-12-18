@@ -1,4 +1,4 @@
-from utils import LoggerSetup
+from main import LoggerSetup
 
 class Generation:
     def __init__(self):

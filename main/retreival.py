@@ -2,7 +2,7 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.document_loaders import TextLoader
 from langchain_community.document_loaders import Docx2txtLoader
 from dotenv import load_dotenv
-from utils import LoggerSetup
+from main import LoggerSetup
 
 class Retreival:
     """
