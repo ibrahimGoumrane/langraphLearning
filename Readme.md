@@ -1,64 +1,72 @@
-# AI Technical Recruiter - LangChain Pipeline
+# AI Technical Recruiter - Structured Evaluation Pipeline
 
 ## Project Overview
 
-This project is an **AI-powered technical recruiter** that evaluates candidates against job descriptions in an **evidence-based and explainable way**. It leverages **LangChain** to create a structured pipeline for candidate assessment using CVs and job descriptions, without relying on external knowledge.
+This project is an **AI-powered technical recruiter** that evaluates candidates against job descriptions using **structured LLM extraction and semantic similarity analysis**. It creates an auditable pipeline for candidate assessment that produces evidence-based, explainable results without relying on external knowledge.
 
-The system is designed to produce **auditable, structured outputs** for each candidate, including skill matching, experience evaluation, and overall suitability scoring.
+The system extracts structured information from CVs and job descriptions, computes semantic similarity between relevant sections, and generates comprehensive evaluation reports with LLM-powered explanations.
 
 ---
 
 ## Key Features
 
-- **Document Ingestion**: Parse and chunk CVs and job descriptions.
-- **Retrieval-Augmented Evaluation (RAG)**: Retrieve only relevant chunks from CVs and job descriptions to ground LLM reasoning.
-- **Skill & Experience Evaluation**: Score candidate skills and experience against job requirements.
-- **Evidence-Based Scoring**: All outputs reference specific CV or job description sections.
-- **Structured JSON Output**: Provides a clear, machine-readable summary of evaluation results.
+- **Document Ingestion**: Load CVs and job descriptions from PDF, DOCX, and TXT formats
+- **Intelligent Text Cleaning**: Remove noise, special characters, and formatting artifacts
+- **Structured LLM Extraction**: Parse documents into semantic sections (education, skills, experience, etc.)
+- **Semantic Similarity Analysis**: Compare CV sections against job requirements using embeddings
+- **LLM-Powered Evaluation**: Generate human-readable explanations and final hiring decisions
+- **Structured JSON Output**: Auditable results with scores, evidence, and reasoning
 
 ---
 
-## Pipeline Overview
+## Pipeline Architecture
 
-1. **Data Preparation**
+### 1. **Document Retrieval**
+   - Load CVs and job descriptions from multiple file formats (PDF, DOCX, TXT)
+   - Extract raw text content using LangChain document loaders
 
-   - CVs and job descriptions are ingested and chunked.
-   - Text embeddings are created and stored in a vector database (FAISS/Chroma).
+### 2. **Text Cleaning**
+   - Remove headers, footers, and special characters
+   - Normalize whitespace and line breaks
+   - Eliminate repeated patterns and artifacts
 
-2. **Retrieval**
+### 3. **Structured Extraction** (Semantic "Chunking")
+   - **CV Extraction**: Education, Skills, Experience, Certifications, Projects
+   - **Job Description Extraction**: Requirements, Responsibilities, Qualifications
+   - Uses LLM (deepseek-r1) with structured output to parse documents into Pydantic models
+   - Each section serves as a semantically meaningful "chunk" aligned to evaluation criteria
 
-   - Relevant CV chunks are retrieved for each job requirement.
-   - Retrieval ensures the LLM sees only task-specific evidence.
+### 4. **Semantic Similarity Scoring**
+   - Generate embeddings for CV and JD sections using Ollama (snowflake-arctic-embed2)
+   - Compute cosine similarity between aligned sections:
+     - **Requirements** ↔ Education + Projects
+     - **Responsibilities** ↔ Experience + Projects
+     - **Qualifications** ↔ Skills + Certifications
+   - Calculate overall similarity (raw and mean scores)
 
-3. **Evaluation Chains**
-
-   - Skill evaluation chain scores each skill requirement.
-   - Experience evaluation chain assesses years and relevance.
-   - Optional red-flag detection identifies gaps or inconsistencies.
-
-4. **Scoring & Decision**
-
-   - Aggregates scores from all evaluation chains.
-   - Produces a final structured JSON output per candidate.
-
-5. **Output**
-   - JSON includes scores, evidence, and overall decision (Pass/Review/Reject).
-   - Designed for explainability and auditability.
+### 5. **LLM-Based Evaluation & Decision**
+   - Pass CV data, JD data, and similarity scores to LLM
+   - Generate detailed explanations for each section match
+   - Produce final hiring decision: **PASS** / **REVIEW** / **REJECT**
+   - Output structured JSON with evidence and reasoning
 
 ---
 
 ## Tech Stack
 
-- **Python**
-- **LangChain**
-- **FAISS / Chroma** (vector store)
-- **OpenAI API / other LLMs**
-- **Pydantic** (for structured outputs)
+- **Python 3.12+**
+- **LangChain** (document loading, LLM orchestration)
+- **Ollama** (local LLM inference - deepseek-r1, snowflake-arctic-embed2)
+- **Pydantic** (structured data validation and schemas)
+- **NumPy** (embedding similarity calculations)
+- **PyPDF, Docx2txt** (document parsing)
 
 ---
 
-## Notes
+## Why This Architecture?
 
-- The project focuses on **task-specific RAG** over candidate CVs and job descriptions, not general knowledge retrieval.
-- Designed to be **pipeline-first**, using LangChain only; upgrade to LangGraph is optional for complex workflows later.
-- Aims to create **deterministic, traceable, and auditable AI evaluation results**.
+- **No Vector Database Needed**: Embeddings are computed on-the-fly; no persistent storage required
+- **Semantic Chunking via LLM**: Structured extraction creates meaningful sections instead of arbitrary text splits
+- **Aligned Evaluation**: CV sections naturally map to JD sections for targeted comparison
+- **Explainable Results**: LLM generates human-readable explanations grounded in similarity scores
+- **Deterministic & Auditable**: Structured pipeline with logging at every stage
