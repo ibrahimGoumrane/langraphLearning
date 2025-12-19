@@ -53,7 +53,7 @@ class BaseProcessing(ABC):
     def _pass_to_agent(self, content: str, extracted_part: str) -> Any:
         """
         Pass content to LLM agent to extract structured information.
-        Uses deepseek-r1:latest model.
+        Uses llama3:latest model.
         
         Args:
             content: The content to process
@@ -63,7 +63,7 @@ class BaseProcessing(ABC):
             Structured output based on the schema
         """
         llm = ChatOllama(
-            model="deepseek-r1:latest",
+            model="llama3:latest",
             temperature=0.0,
             reasoning=False,
             format="json"

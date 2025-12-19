@@ -1,230 +1,212 @@
 from main.utils.logger import LoggerSetup
 from main.generationOutput import EvaluationReport, Decision, OverallScore
-from main.cv.cvmodelOutput import CvmodelOutput
-from main.jobDescription.descmodelOutput import DescmodelOutput
 from langchain_ollama import ChatOllama
+from langchain_core.prompts import PromptTemplate
+from langchain_core.output_parsers import JsonOutputParser
 import time
-
+import json
 class Generation:
     def __init__(self):
         self.logger = LoggerSetup.get_logger(__name__)
         self.logger.info("Generation instance initialized")
         
-        # Decision thresholds
-        self.PASS_THRESHOLD = 0.75
-        self.REVIEW_THRESHOLD = 0.60
+        # Decision thresholds (Adjust these based on your embedding model's typical output)
+        self.PASS_THRESHOLD = 0.50  # Lowered because raw cosine similarity is often lower
+        self.REVIEW_THRESHOLD = 0.35
         
     def _determine_decision(self, mean_score: float) -> Decision:
-        """
-        Determine hiring decision based on mean similarity score.
-        
-        Args:
-            mean_score: Mean similarity score across all sections
-            
-        Returns:
-            Decision enum (PASS, REVIEW, or REJECT)
-        """
         if mean_score >= self.PASS_THRESHOLD:
-            decision = Decision.PASS
+            return Decision.PASS
         elif mean_score >= self.REVIEW_THRESHOLD:
-            decision = Decision.REVIEW
+            return Decision.REVIEW
         else:
-            decision = Decision.REJECT
-            
-        self.logger.info(f"Decision determined: {decision.value} (score: {mean_score:.4f})")
-        return decision
-    
+            return Decision.REJECT
+
     def _format_cv_summary(self, cv: dict) -> str:
-        """Format CV data into a readable summary for the LLM."""
-        summary = "=== CANDIDATE CV ===\n\n"
-        
-        # Education
-        if cv.get("education"):
-            summary += "EDUCATION:\n"
-            for edu in cv["education"]:
-                summary += f"- {edu.degree} in {edu.field_of_study} from {edu.school} ({edu.start_date} - {edu.end_date})\n"
-            summary += "\n"
-        
-        # Skills
+        # (Your existing formatting logic is good, keeping it brief for this snippet)
+        summary = "=== CANDIDATE CV ===\n"
+        # Flatten skills
         if cv.get("skills"):
-            summary += "SKILLS:\n"
-            skills = [skill.name for skill in cv["skills"]]
-            summary += f"- {', '.join(skills)}\n\n"
-        
-        # Experience
+            skills = [s.name for s in cv["skills"]]
+            summary += f"SKILLS: {', '.join(skills)}\n"
+        # Flatten experience
         if cv.get("experience"):
             summary += "EXPERIENCE:\n"
             for exp in cv["experience"]:
-                summary += f"- {exp.position} at {exp.company} ({exp.start_date} - {exp.end_date})\n"
-                summary += f"  {exp.description}\n"
-            summary += "\n"
-        
-        # Certifications
-        if cv.get("certifications"):
-            summary += "CERTIFICATIONS:\n"
-            certs = [cert.name for cert in cv["certifications"]]
-            summary += f"- {', '.join(certs)}\n\n"
-        
-        # Projects
+                summary += f"- {exp.position} at {exp.company}: {exp.description}\n"
+        # Flatten projects
         if cv.get("projects"):
             summary += "PROJECTS:\n"
             for proj in cv["projects"]:
                 summary += f"- {proj.name}: {proj.description}\n"
-            summary += "\n"
-        
+        # Flatten education
+        if cv.get("education"):
+             for edu in cv["education"]:
+                summary += f"EDUCATION: {edu.degree} ({edu.start_date}-{edu.end_date})\n"
         return summary
-    
+
     def _format_jd_summary(self, jd: dict) -> str:
-        """Format job description data into a readable summary for the LLM."""
-        summary = "=== JOB DESCRIPTION ===\n\n"
-        
-        # Requirements
+        summary = "=== JOB DESCRIPTION ===\n"
         if jd.get("requirements"):
-            summary += "REQUIREMENTS:\n"
-            for req in jd["requirements"]:
-                summary += f"- {req.name}\n"
-            summary += "\n"
-        
-        # Responsibilities
+            summary += "REQUIREMENTS:\n" + "\n".join([f"- {r.name}" for r in jd["requirements"]]) + "\n"
         if jd.get("responsibilities"):
-            summary += "RESPONSIBILITIES:\n"
-            for resp in jd["responsibilities"]:
-                summary += f"- {resp.name}\n"
-            summary += "\n"
-        
-        # Qualifications
-        if jd.get("qualifications"):
-            summary += "QUALIFICATIONS:\n"
-            for qual in jd["qualifications"]:
-                summary += f"- {qual.name}\n"
-            summary += "\n"
-        
+            summary += "RESPONSIBILITIES:\n" + "\n".join([f"- {r.name}" for r in jd["responsibilities"]]) + "\n"
         return summary
-    
-    def run(
-        self, 
-        cv: dict, 
-        jd: dict, 
-        similarity_scores: dict[str, float | dict[str, float]]
-    ) -> EvaluationReport:
+
+    def _resolve_final_decision(self, llm_decision_str: str, mean_score: float) -> Decision:
         """
-        Generate final evaluation report with LLM-powered analysis.
+        Combine LLM decision with Embedding Score based on user rules:
+        1. LLM REJECT -> REJECT
+        2. LLM PASS + Low Score -> REVIEW
+        3. LLM REVIEW + Very Low Score (Score says No) -> REJECT
+        """
+        try:
+            llm_decision = llm_decision_str.upper()
+        except AttributeError:
+            self.logger.warning(f"Invalid LLM decision received: {llm_decision_str}. Defaulting to REVIEW check.")
+            llm_decision = "REVIEW"
+
+        # Rule: If LLM rejects, we reject (Veto power)
+        if llm_decision == "REJECT":
+            self.logger.info(f"LLM Decision: REJECT. Final: REJECT.")
+            return Decision.REJECT
+            
+        # Rule: If LLM PASS
+        if llm_decision == "PASS":
+            # If score supports it (>= PASS_THRESHOLD) -> PASS
+            if mean_score >= self.PASS_THRESHOLD:
+                self.logger.info(f"LLM Decision: PASS, Score: {mean_score:.2f} (High). Final: PASS.")
+                return Decision.PASS
+            else:
+                # Score says no (Low) -> REVIEW
+                self.logger.info(f"LLM Decision: PASS, but Score: {mean_score:.2f} (Low). Downgrading to REVIEW.")
+                return Decision.REVIEW
         
-        Args:
-            cv: Structured CV data (dict with education, skills, experience, certifications, projects)
-            jd: Structured job description data (dict with requirements, responsibilities, qualifications)
-            similarity_scores: Dictionary containing:
-                - requirements: float
-                - responsibilities: float
-                - qualifications: float
-                - overall: dict with 'raw' and 'mean' scores
-                
-        Returns:
-            EvaluationReport: Complete evaluation with decision, explanations, and recommendations
+        # Rule: If LLM REVIEW
+        if llm_decision == "REVIEW":
+            # If score supports at least Review (>= REVIEW_THRESHOLD) -> REVIEW
+            if mean_score >= self.REVIEW_THRESHOLD:
+                self.logger.info(f"LLM Decision: REVIEW, Score: {mean_score:.2f} (Ok). Final: REVIEW.")
+                return Decision.REVIEW
+            else:
+                # Score says no (Very Low) -> REJECT
+                self.logger.info(f"LLM Decision: REVIEW, but Score: {mean_score:.2f} (Too Low). Downgrading to REJECT.")
+                return Decision.REJECT
+
+        # Fallback
+        self.logger.warning(f"Unhandled decision case: {llm_decision}. Defaulting to REVIEW.")
+        return Decision.REVIEW
+
+    def run(self, cv: dict, jd: dict, similarity_scores: dict) -> EvaluationReport:
+        """
+        Generates the report by:
+        1. Asking LLM for BLIND analysis (Text only) AND a decision.
+        2. Merging LLM decision with Embedding scores using logic.
         """
         self.logger.info("Starting evaluation report generation")
         start_time = time.time()
         
         try:
-            # Extract scores
-            req_score = similarity_scores["requirements"]
-            resp_score = similarity_scores["responsibilities"]
-            qual_score = similarity_scores["qualifications"]
-            overall = similarity_scores["overall"]
-            mean_score = overall["mean"]
+            # 1. Prepare Data
+            cv_text = self._format_cv_summary(cv)
+            jd_text = self._format_jd_summary(jd)
             
-            self.logger.debug(f"Scores - Requirements: {req_score:.4f}, Responsibilities: {resp_score:.4f}, "
-                            f"Qualifications: {qual_score:.4f}, Mean: {mean_score:.4f}")
+            # 2. Get Embedding Score
+            mean_score = similarity_scores["overall"]["mean"]
             
-            # Determine decision
-            decision = self._determine_decision(mean_score)
+            # 3. Define the "Blind" Prompt
+            system_prompt = """You are an expert technical recruiter. 
+            Analyze the Candidate's CV against the Job Description based ONLY on the text provided.
             
-            # Format data for LLM
-            cv_summary = self._format_cv_summary(cv)
-            jd_summary = self._format_jd_summary(jd)
+            Your Goal: Find the truth.
+            - If the CV mentions a skill (e.g., 'Java'), it is a MATCH, even if it's just listed in skills.
+            - If a skill is explicitly missing, it is a GAP.
+            - Do not be biased by the length of the CV. Look for keywords and semantic meaning.
+            """
             
-            # Construct LLM prompt
-            system_prompt = """You are an expert technical recruiter analyzing candidate-job fit.
-Your task is to provide detailed, evidence-based evaluation of how well a candidate matches a job description.
-
-For each section (Requirements, Responsibilities, Qualifications), you must:
-1. Explain what the similarity score means in practical terms
-2. Identify specific matching points from the CV
-3. Identify gaps or weaknesses
-4. Be honest and balanced in your assessment
-
-Finally, provide an overall recommendation that synthesizes all sections."""
-
-            user_prompt = f"""{cv_summary}
-
-{jd_summary}
-
-=== SIMILARITY SCORES ===
-Requirements Match: {req_score:.2%} (Education + Projects vs Requirements)
-Responsibilities Match: {resp_score:.2%} (Experience + Projects vs Responsibilities)
-Qualifications Match: {qual_score:.2%} (Skills + Certifications vs Qualifications)
-Overall Mean Score: {mean_score:.2%}
-
-=== YOUR TASK ===
-Based on the above CV, job description, and similarity scores, provide a detailed evaluation:
-
-1. **Requirements Evaluation** ({req_score:.2%} match):
-   - Explanation: Why this score? What does it mean?
-   - Key Matches: List 2-3 specific CV items that match requirements
-   - Gaps: List any missing or weak areas
-
-2. **Responsibilities Evaluation** ({resp_score:.2%} match):
-   - Explanation: Why this score? What does it mean?
-   - Key Matches: List 2-3 specific CV items that match responsibilities
-   - Gaps: List any missing or weak areas
-
-3. **Qualifications Evaluation** ({qual_score:.2%} match):
-   - Explanation: Why this score? What does it mean?
-   - Key Matches: List 2-3 specific CV items that match qualifications
-   - Gaps: List any missing or weak areas
-
-4. **Overall Assessment**:
-   - Final Explanation: Synthesize all sections into a coherent assessment
-   - Strengths: List 3-5 key strengths of this candidate
-   - Weaknesses: List 3-5 key weaknesses or gaps
-   - Recommendation: Final hiring recommendation for the hiring manager
-
-Be specific, cite evidence from the CV, and be honest about both strengths and weaknesses."""
-
-            # Call LLM
-            self.logger.info("Calling LLM for evaluation analysis")
-            llm = ChatOllama(
-                model="deepseek-r1:latest",
-                temperature=0.3,
-                reasoning=False,
-                format="json"
-            ).with_structured_output(schema=EvaluationReport)
+            user_prompt = f"""
+            {jd_text}
             
-            messages = [
+            {cv_text}
+            
+            Based on the text above, generate a JSON evaluation in this format:
+            {{
+                "decision": "PASS" | "REVIEW" | "REJECT", 
+                "requirements_evaluation": {{
+                    "explanation": "Brief assessment of technical requirements fit.",
+                    "key_matches": ["list of matching skills/experience found"],
+                    "gaps": ["list of missing requirements"]
+                }},
+                "responsibilities_evaluation": {{
+                    "explanation": "Assessment of ability to perform daily tasks.",
+                    "key_matches": ["relevant experience points"],
+                    "gaps": ["missing experience areas"]
+                }},
+                "qualifications_evaluation": {{
+                    "explanation": "Assessment of certifications and soft skills.",
+                    "key_matches": ["relevant qualifications found"],
+                    "gaps": ["missing qualifications"]
+                }},
+                "final_explanation": "A summary of the candidate's overall fit.",
+                "recommendation": "A professional hiring recommendation sentence."
+            }}
+            """
+
+            # 4. Call LLM (Blindly)
+            self.logger.info("Calling LLM for blind qualitative analysis...")
+            llm = ChatOllama(model="llama3:latest", temperature=0.1, format="json")
+            
+            response = llm.invoke([
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
-            ]
+            ])
             
-            llm_start = time.time()
-            evaluation = llm.invoke(messages)
-            llm_elapsed = time.time() - llm_start
-            self.logger.info(f"LLM evaluation completed in {llm_elapsed:.2f}s")
+            llm_data = json.loads(response.content)
             
-            # Override decision with our threshold-based decision
-            evaluation.decision = decision
-            evaluation.overall_score = OverallScore(raw=overall["raw"], mean=mean_score)
+            # 5. THE MERGE: Combine LLM Decision + Embedding Scores
+            self.logger.info("Merging Embedding Scores with LLM Analysis")
             
-            # Ensure section scores are set
-            evaluation.requirements_evaluation.similarity_score = req_score
-            evaluation.responsibilities_evaluation.similarity_score = resp_score
-            evaluation.qualifications_evaluation.similarity_score = qual_score
+            llm_raw_decision = llm_data.get("decision", "REVIEW")
+            final_decision = self._resolve_final_decision(llm_raw_decision, mean_score)
+            
+            # Construct the final object
+            report = EvaluationReport(
+                decision=final_decision,
+                overall_score=OverallScore(
+                    raw=similarity_scores["overall"]["raw"], 
+                    mean=mean_score
+                ),
+                requirements_evaluation={
+                    "section_name": "Requirements",
+                    "similarity_score": similarity_scores["requirements"],
+                    "explanation": llm_data["requirements_evaluation"]["explanation"],
+                    "key_matches": llm_data["requirements_evaluation"]["key_matches"],
+                    "gaps": llm_data["requirements_evaluation"]["gaps"]
+                },
+                responsibilities_evaluation={
+                    "section_name": "Responsibilities",
+                    "similarity_score": similarity_scores["responsibilities"],
+                    "explanation": llm_data["responsibilities_evaluation"]["explanation"],
+                    "key_matches": llm_data["responsibilities_evaluation"]["key_matches"],
+                    "gaps": llm_data["responsibilities_evaluation"]["gaps"]
+                },
+                qualifications_evaluation={
+                    "section_name": "Qualifications",
+                    "similarity_score": similarity_scores["qualifications"],
+                    "explanation": llm_data["qualifications_evaluation"]["explanation"],
+                    "key_matches": llm_data["qualifications_evaluation"]["key_matches"],
+                    "gaps": llm_data["qualifications_evaluation"]["gaps"]
+                },
+                final_explanation=llm_data["final_explanation"],
+                strengths=llm_data["requirements_evaluation"]["key_matches"],
+                weaknesses=llm_data["requirements_evaluation"]["gaps"],
+                recommendation=llm_data["recommendation"]
+            )
             
             elapsed = time.time() - start_time
-            self.logger.info(f"Evaluation report generated successfully in {elapsed:.2f}s")
-            self.logger.info(f"Final decision: {decision.value}")
-            
-            return evaluation
-            
+            self.logger.info(f"Report generated in {elapsed:.2f}s. Final Decision: {final_decision.value} (LLM said {llm_raw_decision})")
+            return report
+
         except Exception as e:
-            self.logger.error(f"Error generating evaluation report: {str(e)}", exc_info=True)
+            self.logger.error(f"Error in generation: {str(e)}", exc_info=True)
             raise

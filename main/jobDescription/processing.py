@@ -44,11 +44,11 @@ class DescProcessing(BaseProcessing):
 
     def __extract_qualifications(self, jd_content: str):
         return self._pass_to_agent(jd_content, "qualifications")
-    def flatten_objects_to_string(self , objects : DescmodelOutput) -> dict[str , str]:
-        # Extract the parts of the job description
-        requirements = objects.requirements
-        responsibilities = objects.responsibilities
-        qualifications = objects.qualifications
+    def flatten_objects_to_string(self , objects : dict) -> dict[str , str]:
+        # Extract the parts of the job description (objects is a dict, not a Pydantic model)
+        requirements = objects.get("requirements", [])
+        responsibilities = objects.get("responsibilities", [])
+        qualifications = objects.get("qualifications", [])
 
         # Flatten each part into its own string 
         requirements_str = ' '.join([requirement.name for requirement in requirements])

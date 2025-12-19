@@ -1,0 +1,46 @@
+{
+    "decision": "REVIEW",
+    "overall_score": {
+        "raw": 0.3568609625624407,
+        "mean": 0.3392875053263219
+    },
+    "requirements_evaluation": {
+        "section_name": "Requirements",
+        "similarity_score": 0.341991351594209,
+        "explanation": "The candidate has a strong foundation in Spring Boot, which is a key requirement for this role. Additionally, their experience with microservices architecture and database optimization suggests they can handle the responsibilities listed.",
+        "key_matches": [
+            "Spring Boot",
+            "microservices architecture",
+            "database optimization"
+        ],
+        "gaps": []
+    },
+    "responsibilities_evaluation": {
+        "section_name": "Responsibilities",
+        "similarity_score": 0.341991351594209,
+        "explanation": "The candidate has relevant experience in developing RESTful APIs, designing microservices architecture, and troubleshooting backend issues. Their ability to collaborate with front-end developers and product managers is also evident.",
+        "key_matches": [
+            "Full Stack & Chef de Projet at Plateforme de Recrutement EHC",
+            "Full Stack & Chef de Projet Freelance at Financiana Free Lance"
+        ],
+        "gaps": []
+    },
+    "qualifications_evaluation": {
+        "section_name": "Qualifications",
+        "similarity_score": 0.3284721202547736,
+        "explanation": "The candidate has a strong educational background in AI and software engineering, which aligns with the requirements of this role.",
+        "key_matches": [
+            "Cycle préparatoire intégré",
+            "Cycle d'ingénieur, filière Intelligence Artificielle et Génie Informatique"
+        ],
+        "gaps": []
+    },
+    "final_explanation": "The candidate has a strong technical foundation and relevant experience in developing RESTful APIs, designing microservices architecture, and troubleshooting backend issues. Their educational background also aligns with the requirements of this role.",
+    "strengths": [
+        "Spring Boot",
+        "microservices architecture",
+        "database optimization"
+    ],
+    "weaknesses": [],
+    "recommendation": "Based on the provided information, I strongly recommend moving forward with the candidate for further evaluation."
+}

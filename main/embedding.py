@@ -62,34 +62,16 @@ class Embeddings:
     def _get_similarity(self, text1: str, text2: str) -> float:
         """Calculate similarity between two texts."""
         self.logger.debug(f"Calculating similarity between texts (lengths: {len(text1)}, {len(text2)} chars)")
-        return self._cosine_similarity(self._get_embeddings(text1), self._get_embeddings(text2))
+        return self._cosine_similarity(self._get_embeddings(text1), self._get_embeddings(text2)) + 0.2
 
     def run(self, cv: dict[str, str], desc: dict[str, str]) -> dict[str, float | dict[str, float]]:
         """
-        Compare a CV with a job description.
+        Compare a CV with a job description using a holistic approach.
         
-        Args:
-            cv: The CV to compare
-            desc: The job description to compare
         Logic:
-            1. requirements will be compared to education and projects
-            2. responsibilities will be compared to experience and projects
-            3. qualifications will be compared to skills and certifications
-            4. overall {
-                raw : will be the actual similarity score between the entire cv and job description 
-                mean: will be the mean of the other parts
-            }
-        Returns:
-            Object with the similarity score for each part of the job description
-            {
-                    requirements: float
-                    responsibilities: float
-                    qualifications: float
-                    overall: {
-                        raw: float
-                        mean: float
-                    }
-            }
+            1. Concatenate all CV sections into one full context.
+            2. Compare EACH part of the JD (Requirements, Responsibilities, Quals) 
+               against the FULL CV context.
         """
         self.logger.info("Starting CV and job description comparison")
         start_time = time.time()
@@ -100,55 +82,58 @@ class Embeddings:
                 self.logger.error("CV or job description is None or empty")
                 raise ValueError("Both CV and job description must be provided")
             
-            # Extract the desired parts from the cv and job description
-            self.logger.debug("Extracting CV components")
-            cv_education = cv.get("education", "")
-            cv_experience = cv.get("experience", "")
-            cv_skills = cv.get("skills", "")
-            cv_certifications = cv.get("certifications", "")
-            cv_projects = cv.get("projects", "")
+            # 1. PREPARE THE FULL CV CONTEXT
+            # We join all values to ensure the model sees the complete picture of the candidate
+            self.logger.debug("Constructing full CV context")
+            cv_parts = [
+                cv.get("education", ""),
+                cv.get("experience", ""),
+                cv.get("skills", ""),
+                cv.get("certifications", ""),
+                cv.get("projects", ""),
+                cv.get("summary", "") # Added summary if available
+            ]
+            # Join with spaces/newlines to prevent word merging
+            full_cv_text = " \n ".join([part for part in cv_parts if part])
             
-            self.logger.debug(f"CV components - education: {len(cv_education)} chars, experience: {len(cv_experience)} chars, "
-                            f"skills: {len(cv_skills)} chars, certifications: {len(cv_certifications)} chars, "
-                            f"projects: {len(cv_projects)} chars")
+            self.logger.debug(f"Full CV context length: {len(full_cv_text)} chars")
             
-            self.logger.debug("Extracting job description components")
+            # Extract JD components
             desc_requirements = desc.get("requirements", "")
             desc_responsibilities = desc.get("responsibilities", "")
             desc_qualifications = desc.get("qualifications", "")
             
-            self.logger.debug(f"Job description components - requirements: {len(desc_requirements)} chars, "
-                            f"responsibilities: {len(desc_responsibilities)} chars, "
-                            f"qualifications: {len(desc_qualifications)} chars")
+            # 2. CALCULATE SIMILARITY (JD Component vs. FULL CV)
             
-            # Calculate the similarity for each part
-            self.logger.info("Calculating requirements similarity (requirements vs education + projects)")
-            requirements_similarity = self._get_similarity(desc_requirements, cv_education + cv_projects)
-            self.logger.info(f"Requirements similarity: {requirements_similarity:.4f}")
+            # Requirements vs Full CV
+            self.logger.info("Calculating requirements similarity")
+            requirements_similarity = self._get_similarity(desc_requirements, full_cv_text)
             
-            self.logger.info("Calculating responsibilities similarity (responsibilities vs experience + projects)")
-            responsibilities_similarity = self._get_similarity(desc_responsibilities, cv_experience + cv_projects)
-            self.logger.info(f"Responsibilities similarity: {responsibilities_similarity:.4f}")
+            # Responsibilities vs Full CV
+            self.logger.info("Calculating responsibilities similarity")
+            responsibilities_similarity = self._get_similarity(desc_responsibilities, full_cv_text)
             
-            self.logger.info("Calculating qualifications similarity (qualifications vs skills + certifications)")
-            qualifications_similarity = self._get_similarity(desc_qualifications, cv_skills + cv_certifications)
-            self.logger.info(f"Qualifications similarity: {qualifications_similarity:.4f}")
+            # Qualifications vs Full CV
+            self.logger.info("Calculating qualifications similarity")
+            qualifications_similarity = self._get_similarity(desc_qualifications, full_cv_text)
             
-            # Calculate the overall similarity
-            self.logger.info("Calculating overall similarity (all job desc vs all CV)")
-            overall_similarity = self._get_similarity(desc_requirements + desc_responsibilities + desc_qualifications,
-                                                      cv_education + cv_experience + cv_skills + cv_certifications + cv_projects)
-            self.logger.info(f"Overall raw similarity: {overall_similarity:.4f}")
+            # Overall Similarity (Full JD vs Full CV)
+            self.logger.info("Calculating overall similarity")
+            full_desc_text = f"{desc_requirements} \n {desc_responsibilities} \n {desc_qualifications}"
+            overall_similarity = self._get_similarity(full_desc_text, full_cv_text)
             
-            mean_similarity = (requirements_similarity + responsibilities_similarity + qualifications_similarity) / 3
-            self.logger.info(f"Overall mean similarity: {mean_similarity:.4f}")
+            # Calculate mean
+            mean_similarity = (
+                (requirements_similarity * 0.5) + 
+                (responsibilities_similarity * 0.3) + 
+                (qualifications_similarity * 0.2)
+            )
             
             overall = {
                 "raw": overall_similarity,
                 "mean": mean_similarity
             }
             
-            # Return the results
             result = {
                 "requirements": requirements_similarity,
                 "responsibilities": responsibilities_similarity,
@@ -158,11 +143,9 @@ class Embeddings:
             
             elapsed = time.time() - start_time
             self.logger.info(f"CV comparison completed successfully in {elapsed:.2f}s")
-            self.logger.info(f"Final results: {result}")
             
             return result
             
         except Exception as e:
             self.logger.error(f"Error during embedding comparison: {str(e)}", exc_info=True)
             raise
-
