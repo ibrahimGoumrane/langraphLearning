@@ -1,5 +1,5 @@
 from main.processing import BaseProcessing
-from cv import CvmodelOutput
+from main.cv.cvmodelOutput import CvmodelOutput
 from typing import Any
 
 

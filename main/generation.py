@@ -1,5 +1,7 @@
-from main import LoggerSetup
-from main import EvaluationReport, Decision, OverallScore ,CvmodelOutput,DescmodelOutput
+from main.utils.logger import LoggerSetup
+from main.generationOutput import EvaluationReport, Decision, OverallScore
+from main.cv.cvmodelOutput import CvmodelOutput
+from main.jobDescription.descmodelOutput import DescmodelOutput
 from langchain_ollama import ChatOllama
 import time
 

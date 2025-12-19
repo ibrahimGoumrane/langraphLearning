@@ -26,12 +26,7 @@ class Retreival:
             for page in loader.lazy_load():
                 content += page.page_content
             
-            output_path = "../files/docx/cvpfe.txt"
-            with open(output_path , "w") as f:
-                f.write(content)
-            
             self.logger.info(f"Successfully loaded DOCX file. Content length: {len(content)} characters")
-            self.logger.debug(f"Content saved to: {output_path}")
             return content
         except Exception as e:
             self.logger.error(f"Error loading DOCX file from {path}: {str(e)}", exc_info=True)
@@ -49,12 +44,7 @@ class Retreival:
             for page in loader.lazy_load():
                 content += page.page_content
             
-            output_path = "../files/txt/cvpfe.txt"
-            with open(output_path , "w") as f:
-                f.write(content)
-            
             self.logger.info(f"Successfully loaded TXT file. Content length: {len(content)} characters")
-            self.logger.debug(f"Content saved to: {output_path}")
             return content
         except Exception as e:
             self.logger.error(f"Error loading TXT file from {path}: {str(e)}", exc_info=True)
@@ -67,18 +57,13 @@ class Retreival:
         """
         try:
             self.logger.info(f"Loading PDF file from: {path}")
-            loader = PyPDFLoader(path , images_inner_format="markdown-img")
+            loader = PyPDFLoader(path , mode="page")
             # Write the extracted Content to a file
             content = ""
             for page in loader.lazy_load():
                 content += page.page_content
-            
-            output_path = "../files/pdf/cvpfe.txt"
-            with open(output_path , "w") as f:
-                f.write(content)
-            
+
             self.logger.info(f"Successfully loaded PDF file. Content length: {len(content)} characters")
-            self.logger.debug(f"Content saved to: {output_path}")
             return content
         except Exception as e:
             self.logger.error(f"Error loading PDF file from {path}: {str(e)}", exc_info=True)

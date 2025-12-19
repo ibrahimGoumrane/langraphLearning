@@ -1,5 +1,5 @@
 from main.processing import BaseProcessing
-from jobDescription import DescmodelOutput
+from main.jobDescription.descmodelOutput import DescmodelOutput
 from typing import Any
 
 
