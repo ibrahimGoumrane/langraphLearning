@@ -50,13 +50,37 @@ class CvProcessing(BaseProcessing):
 
     def __extract_projects(self, cv_content: str):
         return self._pass_to_agent(cv_content, "projects")
+   
+    def flatten_objects_to_string(self , objects : CvmodelOutput) -> dict[str , str]:
+        # Extract the parts of the cv
+        education = objects.education
+        skills = objects.skills
+        experience = objects.experience
+        certifications = objects.certifications
+        projects = cv.projects
 
-    def run(self, cv_content: str) -> CvmodelOutput:
+        # Flatten each part into its own string 
+        education_str = ' '.join([f"{edu.degree} {edu.field_of_study} {edu.school}" for edu in cv.education])
+        skills_str = flatten_field(cv.skills, 'name')
+        experience_str = ' '.join([f"{exp.position} at {exp.company}. {exp.description}" for exp in cv.experience])
+        certifications_str = flatten_field(cv.certifications, 'name')
+        projects_str = ' '.join([f"{proj.name}. {proj.description}" for proj in cv.projects])
+    
+        return {
+            "education": education_str,
+            "skills": skills_str,
+            "experience": experience_str,
+            "certifications": certifications_str,
+            "projects": projects_str
+        }
+
+    def run(self, cv_content: str , output_format: str = "json") -> CvmodelOutput:
         """
         Process CV content and extract all sections.
         
         Args:
             cv_content: Raw CV text content
+            output_format: Format of the output (json or string)
             
         Returns:
             CvmodelOutput: Structured CV data
@@ -78,18 +102,18 @@ class CvProcessing(BaseProcessing):
 
             projects = self.__extract_projects(cv_content).projects
             self.logger.debug("Projects extracted")
-
             result: CvmodelOutput = {
-                "education": education,
-                "skills": skills,
-                "experience": experience,
-                "certifications": certifications,
-                "projects": projects
-            }
-
+                    "education": education,
+                    "skills": skills,
+                    "experience": experience,
+                    "certifications": certifications,
+                    "projects": projects
+                }
             self.logger.info("CV processing completed successfully")
-            return result
-
+            if output_format == "json":
+                return result
+            elif output_format == "string":
+                return self.flatten_objects_to_string(result)
         except Exception as e:
             self.logger.error(f"Error during CV processing: {str(e)}", exc_info=True)
             raise

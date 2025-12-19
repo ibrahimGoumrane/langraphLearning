@@ -84,6 +84,20 @@ class BaseProcessing(ABC):
         return response
     
     @abstractmethod
+    def flatten_objects_to_string(self, objects: Any) -> str:
+        """
+        Flatten a list of objects to a string.
+        Must be implemented by subclasses.
+        
+        Args:
+            objects: The list of objects to flatten
+            
+        Returns:
+            str: The flattened string
+        """
+        pass
+
+    @abstractmethod
     def run(self, content: str) -> Any:
         """
         Main method to process the content.
