@@ -42,13 +42,16 @@ The system extracts structured information from CVs and job descriptions, comput
      - **Requirements** ↔ Education + Projects
      - **Responsibilities** ↔ Experience + Projects
      - **Qualifications** ↔ Skills + Certifications
-   - Calculate overall similarity (raw and mean scores)
+   - Calculate overall weighted score (Requirements 50%, Responsibilities 30%, Qualifications 20%)
 
-### 5. **LLM-Based Evaluation & Decision**
-   - Pass CV data, JD data, and similarity scores to LLM
-   - Generate detailed explanations for each section match
-   - Produce final hiring decision: **PASS** / **REVIEW** / **REJECT**
-   - Output structured JSON with evidence and reasoning
+### 5. **Hybrid Evaluation & Decision Engine**
+   - **Blind LLM Analysis**: LLM analyzes text context *without* seeing scores to form an unbiased opinion
+   - **Score Verification**: Embedding scores act as a "veto" or "verification" layer
+   - **Hybrid Logic**:
+     - LLM **REJECT** → Final **REJECT**
+     - LLM **PASS** + Low Score → Downgrade to **REVIEW**
+     - LLM **REVIEW** + Very Low Score → Downgrade to **REJECT**
+   - Output structured JSON with evidence, reasoning, and final decision
 
 ---
 
@@ -56,7 +59,7 @@ The system extracts structured information from CVs and job descriptions, comput
 
 - **Python 3.12+**
 - **LangChain** (document loading, LLM orchestration)
-- **Ollama** (local LLM inference - deepseek-r1, snowflake-arctic-embed2)
+- **Ollama** (local LLM inference - llama3:latest, snowflake-arctic-embed2)
 - **Pydantic** (structured data validation and schemas)
 - **NumPy** (embedding similarity calculations)
 - **PyPDF, Docx2txt** (document parsing)
