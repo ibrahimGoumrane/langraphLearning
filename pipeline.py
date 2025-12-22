@@ -16,6 +16,7 @@ from main.retreival import Retreival
 from main.cleaning import Cleaning
 import time
 from pathlib import Path
+from typing import Callable, Optional
 
 
 class RecruitmentPipeline:
@@ -52,7 +53,8 @@ class RecruitmentPipeline:
         jd_path: str,
         cv_type: str = "pdf",
         jd_type: str = "pdf",
-        output_path: str = "results/evaluation_report.json"
+        output_path: str = "results/evaluation_report.json",
+        on_step_progress: Optional[Callable[[str, int], None]] = None
     ) -> EvaluationReport:
         """
         Execute the complete recruitment pipeline.
@@ -63,6 +65,7 @@ class RecruitmentPipeline:
             cv_type: CV file type (pdf, docx, txt)
             jd_type: Job description file type (pdf, docx, txt)
             output_path: Path to save the final evaluation report
+            on_step_progress: Optional callback function(message: str, progress: int)
             
         Returns:
             EvaluationReport: Complete evaluation with decision and explanations
@@ -73,6 +76,9 @@ class RecruitmentPipeline:
         self.logger.info(f"CV: {cv_path} ({cv_type})")
         self.logger.info(f"JD: {jd_path} ({jd_type})")
         self.logger.info("=" * 80)
+        
+        if on_step_progress:
+            on_step_progress("Pipeline started", 0)
         
         try:
             # ========== STAGE 1: DOCUMENT RETRIEVAL ==========
@@ -88,6 +94,9 @@ class RecruitmentPipeline:
             self.logger.info(f"✓ Documents loaded successfully in {stage_elapsed:.2f}s")
             self.logger.info(f"  CV length: {len(cv_raw)} characters")
             self.logger.info(f"  JD length: {len(jd_raw)} characters")
+
+            if on_step_progress:
+                on_step_progress("Documents loaded successfully", 20)
             
             # ========== STAGE 2: TEXT CLEANING ==========
             self.logger.info("\n" + "=" * 80)
@@ -102,6 +111,9 @@ class RecruitmentPipeline:
             self.logger.info(f"✓ Text cleaned successfully in {stage_elapsed:.2f}s")
             self.logger.info(f"  CV cleaned length: {len(cv_clean)} characters")
             self.logger.info(f"  JD cleaned length: {len(jd_clean)} characters")
+
+            if on_step_progress:
+                on_step_progress("Text cleaning completed", 40)
             
             
             # ========== STAGE 3: STRUCTURED PROCESSING ==========
@@ -121,6 +133,9 @@ class RecruitmentPipeline:
             
             stage_elapsed = time.time() - stage_start
             self.logger.info(f"✓ Structured extraction completed in {stage_elapsed:.2f}s")
+            
+            if on_step_progress:
+                on_step_progress("Structured extraction completed", 60)
 
 
             # ========== STAGE 4: SEMANTIC SIMILARITY SCORING ==========
@@ -137,6 +152,9 @@ class RecruitmentPipeline:
             self.logger.info(f"  Responsibilities match: {similarity_scores['responsibilities']:.2%}")
             self.logger.info(f"  Qualifications match: {similarity_scores['qualifications']:.2%}")
             self.logger.info(f"  Overall mean: {similarity_scores['overall']['mean']:.2%}")
+
+            if on_step_progress:
+                on_step_progress("Similarity scoring completed", 80)
             
             # ========== STAGE 5: FINAL EVALUATION & DECISION ==========
             self.logger.info("\n" + "=" * 80)
@@ -153,6 +171,9 @@ class RecruitmentPipeline:
             
             self.logger.info(f"✓ Evaluation completed in {stage_elapsed:.2f}s")
             self.logger.info(f"  FINAL DECISION: {evaluation_report.decision.value}")
+
+            if on_step_progress:
+                on_step_progress("Final evaluation completed", 90)
             
             # ========== SAVE RESULTS ==========
             self.logger.info("\n" + "=" * 80)
@@ -166,6 +187,9 @@ class RecruitmentPipeline:
             # Save the evaluation report
             Saver.saveJson(evaluation_report, output_path)
             self.logger.info(f"✓ Evaluation report saved to: {output_path}")
+
+            if on_step_progress:
+                on_step_progress("Pipeline completed successfully", 100)
             
             # ========== PIPELINE COMPLETE ==========
             pipeline_elapsed = time.time() - pipeline_start
