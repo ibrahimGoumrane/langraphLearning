@@ -10,7 +10,8 @@ from main import (
     DescProcessing,
     Embeddings,
     Generation,
-    EvaluationReport
+    EvaluationReport,
+    SummaryTranslation
 )
 from main.retreival import Retreival
 from main.cleaning import Cleaning
@@ -40,6 +41,7 @@ class RecruitmentPipeline:
         # Initialize all pipeline components
         self.retrieval = Retreival()
         self.cleaning = Cleaning()
+        self.summary_translation = SummaryTranslation()
         self.cv_processing = CvProcessing()
         self.desc_processing = DescProcessing()
         self.embeddings = Embeddings()
@@ -98,22 +100,35 @@ class RecruitmentPipeline:
             if on_step_progress:
                 on_step_progress("Documents loaded successfully", 20)
             
-            # ========== STAGE 2: TEXT CLEANING ==========
+            # ========== STAGE 2: TEXT CLEANING + TRANSLATION ==========
             self.logger.info("\n" + "=" * 80)
-            self.logger.info("STAGE 2: TEXT CLEANING")
+            self.logger.info("STAGE 2: TEXT CLEANING + TRANSLATION")
             self.logger.info("=" * 80)
             
+            # Calculate dynamic summary length based on smallest input
+            min_length = min(len(cv_raw), len(jd_raw))
+            self.logger.info(f"Dynamic summary length calculated: {min_length} chars (CV: {len(cv_raw)}, JD: {len(jd_raw)})")
+            
+            # Define translation callback
+            def translate_to_english(text: str) -> str:
+                """Callback to summarize and translate text to English"""
+                return self.summary_translation.run(
+                    content=text,
+                    target_length=min_length,
+                    target_language="English"
+                )
+            
             stage_start = time.time()
-            cv_clean = self.cleaning.run(cv_raw)
-            jd_clean = self.cleaning.run(jd_raw)
+            cv_clean = self.cleaning.run(cv_raw, translation_callback=translate_to_english)
+            jd_clean = self.cleaning.run(jd_raw, translation_callback=translate_to_english)
             stage_elapsed = time.time() - stage_start
             
-            self.logger.info(f"✓ Text cleaned successfully in {stage_elapsed:.2f}s")
+            self.logger.info(f"✓ Text cleaned and translated successfully in {stage_elapsed:.2f}s")
             self.logger.info(f"  CV cleaned length: {len(cv_clean)} characters")
             self.logger.info(f"  JD cleaned length: {len(jd_clean)} characters")
 
             if on_step_progress:
-                on_step_progress("Text cleaning completed", 40)
+                on_step_progress("Text cleaning and translation completed", 40)
             
             
             # ========== STAGE 3: STRUCTURED PROCESSING ==========
@@ -127,10 +142,14 @@ class RecruitmentPipeline:
             cv_structured = self.cv_processing.run(cv_clean, output_format="json")
             cv_strings = self.cv_processing.flatten_objects_to_string(cv_structured)
             
+            first_elapsed = time.time() - stage_start
+            self.logger.info(f"✓ CV structured extraction completed in {first_elapsed:.2f}s")
+
             self.logger.info("Processing Job Description...")
             jd_structured = self.desc_processing.run(jd_clean, output_format="json")
             jd_strings = self.desc_processing.flatten_objects_to_string(jd_structured)
-            
+            self.logger.info(f"✓ JD structured extraction completed in {time.time() - stage_start - first_elapsed:.2f}s")
+
             stage_elapsed = time.time() - stage_start
             self.logger.info(f"✓ Structured extraction completed in {stage_elapsed:.2f}s")
             

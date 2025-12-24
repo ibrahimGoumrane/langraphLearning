@@ -1,6 +1,11 @@
 import re
 from main import LoggerSetup
-
+import inflect
+import nltk
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from nltk.stem import WordNetLemmatizer
+from nltk.stem.porter import PorterStemmer 
 class Cleaning:
     """
     Main Exposed Function for Cleaning
@@ -9,6 +14,13 @@ class Cleaning:
     def __init__(self):
         self.logger = LoggerSetup.get_logger(__name__)
         self.logger.info("Cleaning instance initialized")
+        self.inflector = inflect.engine()
+        nltk.download('punkt')
+        nltk.download('stopwords')
+        nltk.download('wordnet')
+        self.stop_words = set(stopwords.words('english'))
+        self.porter_stemmer = PorterStemmer()
+        self.lemmatizer = WordNetLemmatizer()
 
     def __remove_special_characters(self , content : str) -> str:
         """
@@ -139,12 +151,118 @@ class Cleaning:
             self.logger.error(f"Error removing repeated substrings: {str(e)}", exc_info=True)
             raise
     
+    def __text_lowercase(self , content : str) -> str:
+        """
+        Private Function for Lowercasing Text
+        Converts all text to lowercase
+        Is : __text_lowercase(self , content : str) -> str 
+        """
+        try:
+            content = content.lower()
+            self.logger.debug(f"Text lowercased. Length after: {len(content)}")
+            return content
+        except Exception as e:
+            self.logger.error(f"Error lowercasing text: {str(e)}", exc_info=True)
+            raise
 
+    def __convert_numbers_to_words(self , content : str) -> str:
+        """
+        Private Function for Converting Numbers to Words
+        Converts numeric digits to their word representation
+        Is : __convert_numbers_to_words(self , content : str) -> str 
+        """
+        try:
+            def replace_number(match):
+                number = match.group(0)
+                return self.inflector.number_to_words(number)
 
-    def run(self , content : str) -> str:
+            content = re.sub(r'\b\d+\b', replace_number, content)
+            self.logger.debug(f"Numbers converted to words. Length after: {len(content)}")
+            return content
+        except Exception as e:
+            self.logger.error(f"Error converting numbers to words: {str(e)}", exc_info=True)
+            raise   
+
+    def  __remove_stopwords(self , content : str) -> str:
+        """
+        Private Function for Removing Stopwords
+        Removes common stopwords from the text
+        Is : __remove_stopwords(self , content : str) -> str 
+        """
+        try:
+            words = word_tokenize(content)
+            filtered_words = [word for word in words if word.lower() not in self.stop_words]
+            content = ' '.join(filtered_words)
+            self.logger.debug(f"Stopwords removed. Length after: {len(content)}")
+            return content
+        except Exception as e:
+            self.logger.error(f"Error removing stopwords: {str(e)}", exc_info=True)
+            raise     
+
+    def __stem_words(self , content : str) -> str:
+        """
+        Private Function for Stemming Words
+        Reduces words to their root form using Porter Stemmer
+        Is : __stem_words(self , content : str) -> str 
+        """
+        try:
+            words = word_tokenize(content)
+            stemmed_words = [self.porter_stemmer.stem(word) for word in words]
+            content = ' '.join(stemmed_words)
+            self.logger.debug(f"Words stemmed. Length after: {len(content)}")
+            return content
+        except Exception as e:
+            self.logger.error(f"Error stemming words: {str(e)}", exc_info=True)
+            raise        
+
+    def __lemmatize_words(self , content : str) -> str: 
+        """
+        Private Function for Lemmatizing Words
+        Reduces words to their base form using WordNet Lemmatizer
+        Is : __lemmatize_words(self , content : str) -> str 
+        """
+        try:
+            words = word_tokenize(content)
+            lemmatized_words = [self.lemmatizer.lemmatize(word) for word in words]
+            content = ' '.join(lemmatized_words)
+            self.logger.debug(f"Words lemmatized. Length after: {len(content)}")
+            return content
+        except Exception as e:
+            self.logger.error(f"Error lemmatizing words: {str(e)}", exc_info=True)
+            raise   
+    def __remove_repetitive_words(self , content : str) -> str:
+        """
+        Private Function for Removing Repetitive Words from Text
+        Removes ALL duplicate words from entire text, keeping only first occurrence
+        Is : __remove_repetitive_words(self , content : str) -> str 
+        """
+        try:
+            tokens = word_tokenize(content)
+            
+            # Remove all duplicate words while preserving order of first occurrences
+            seen_words = set()
+            filtered_tokens = []
+            
+            for token in tokens:
+                # Only add if we haven't seen this word before (case-insensitive)
+                token_lower = token.lower()
+                if token_lower not in seen_words:
+                    filtered_tokens.append(token)
+                    seen_words.add(token_lower)
+            
+            content = ' '.join(filtered_tokens)
+            self.logger.debug(f"Repetitive words removed. Length after: {len(content)}")
+            return content
+        except Exception as e:
+            self.logger.error(f"Error removing repetitive words: {str(e)}", exc_info=True)
+            raise
+    def run(self , content : str , translation_callback=None) -> str:
         """
         Main Exposed Function for Cleaning
-        Is : run(self , content : str) -> str 
+        Is : run(self , content : str , translation_callback=None) -> str 
+        Args:
+            content: The text content to be cleaned
+            translation_callback: Optional function to translate text to English
         """
         self.logger.info(f"Starting Cleaning process. Content length: {len(content)} characters")
         
@@ -168,6 +286,31 @@ class Cleaning:
             # Remove extra newlines
             content = self.__remove_extra_newlines(content)
             self.logger.debug("Extra newlines removed")
+            
+            # Convert text to lowercase
+            content = self.__text_lowercase(content)
+            self.logger.debug("Text converted to lowercase")
+            
+            content = translation_callback(content) if translation_callback else content
+            # Convert numbers to words
+            content = self.__convert_numbers_to_words(content)
+            self.logger.debug("Numbers converted to words")
+            
+            # Remove stopwords
+            content = self.__remove_stopwords(content)
+            self.logger.debug("Stopwords removed")
+            
+            # Stem words
+            content = self.__stem_words(content)
+            self.logger.debug("Words stemmed")
+            
+            # Lemmatize words
+            content = self.__lemmatize_words(content)
+            self.logger.debug("Words lemmatized")
+            
+            # Remove repetitive words
+            content = self.__remove_repetitive_words(content)
+            self.logger.debug("Repetitive words removed")
             
             self.logger.info(f"Cleaning completed. Final content length: {len(content)} characters")
             return content

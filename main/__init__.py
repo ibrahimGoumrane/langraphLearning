@@ -7,7 +7,8 @@ from main.cv import CvmodelOutput
 from main.embedding import Embeddings
 from main.generation import Generation
 from main.generationOutput import EvaluationReport, Decision, SectionEvaluation, OverallScore
-
+from main.summary_translation import SummaryTranslation
+from main.summaryOutput import SummaryOutput
 __all__ = [
     "LoggerSetup",
     "Saver",
@@ -21,6 +22,8 @@ __all__ = [
     "EvaluationReport",
     "Decision",
     "SectionEvaluation",
-    "OverallScore"
+    "OverallScore",
+    "SummaryTranslation",
+    "SummaryOutput",
 ]
 

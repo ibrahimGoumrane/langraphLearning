@@ -51,8 +51,22 @@ class Embeddings:
     def _cosine_similarity(self, embeddings1: list[float], embeddings2: list[float]) -> float:
         """Calculate cosine similarity between two embedding vectors."""
         try:
-            # Fixed: removed "1 -" to get actual similarity (0-1) instead of distance
-            similarity = np.dot(embeddings1, embeddings2) / (np.linalg.norm(embeddings1) * np.linalg.norm(embeddings2))
+            norm1 = np.linalg.norm(embeddings1)
+            norm2 = np.linalg.norm(embeddings2)
+            
+            # Prevent division by zero
+            if norm1 == 0 or norm2 == 0:
+                self.logger.warning("Zero norm detected in embeddings, returning 0.0 similarity")
+                return 0.0
+            
+            dot_product = np.dot(embeddings1, embeddings2)
+            similarity = dot_product / (norm1 * norm2)
+            
+            # Ensure result is valid
+            if np.isnan(similarity) or np.isinf(similarity):
+                self.logger.warning(f"Invalid similarity value detected: {similarity}, returning 0.0")
+                return 0.0
+            
             self.logger.debug(f"Calculated cosine similarity: {similarity:.4f}")
             return float(similarity)
         except Exception as e:

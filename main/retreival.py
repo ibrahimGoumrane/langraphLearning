@@ -1,12 +1,8 @@
 from langchain_community.document_loaders import TextLoader
 from langchain_community.document_loaders import Docx2txtLoader
-from dotenv import load_dotenv
 from main import LoggerSetup
 import pypdfium2 as pdfium
 import pytesseract
-from PIL import Image
-import tempfile
-import os
 
 class Retreival:
     """

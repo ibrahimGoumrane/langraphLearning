@@ -1,8 +1,6 @@
 from main.utils.logger import LoggerSetup
 from main.generationOutput import EvaluationReport, Decision, OverallScore
 from langchain_ollama import ChatOllama
-from langchain_core.prompts import PromptTemplate
-from langchain_core.output_parsers import JsonOutputParser
 import time
 import json
 class Generation:
